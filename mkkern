@@ -77,20 +77,20 @@ fi
 # remove option POOL_DEBUG from /usr/src/sys/conf/GENERIC (slower allocation!)
 # modify /usr/src/sys/arch/`uname -m`/conf/GENERIC
 
-grep -v POOL_DEBUG /usr/src/sys/conf/GENERIC > /usr/src/sys/conf/FLASHRD
+grep -v POOL_DEBUG /usr/src/sys/conf/GENERIC > /usr/src/sys/conf/BRAHMA
 # if you want POOL_DEBUG, do this instead:
-#cp /usr/src/sys/conf/GENERIC /usr/src/sys/conf/FLASHRD
+#cp /usr/src/sys/conf/GENERIC /usr/src/sys/conf/BRAHMA
 
-egrep -v ^config $kernsrc/conf/GENERIC | sed -e 's/GENERIC/FLASHRD/' > $kernsrc/conf/FLASHRD
+egrep -v ^config $kernsrc/conf/GENERIC | sed -e 's/GENERIC/BRAHMA/' > $kernsrc/conf/BRAHMA
 
-cat >> $kernsrc/conf/FLASHRD <<-EOF
+cat >> $kernsrc/conf/BRAHMA <<-EOF
 	option	RAMDISK_HOOKS
 	option	MINIROOTSIZE=$blocks
 	config	bsd	root on rd0a swap on rd0b and wd0b and sd0b
 	pseudo-device	rd 1
 	EOF
 
-sed -e 's/GENERIC/FLASHRD/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/FLASHRD.MP
+sed -e 's/GENERIC/BRAHMA/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/BRAHMA.MP
 
 ###
 #
@@ -102,22 +102,22 @@ c 0 cc -o ./elfrdsetroot $elfrdsetroot
 #
 # compile our version of GENERIC
 
-echo -n Configuring FLASHRD kernel
+echo -n Configuring BRAHMA kernel
 wd=`pwd`
 cd $kernsrc/conf
-c 0 "config FLASHRD >/dev/null 2>&1"
-c 0 "config FLASHRD.MP >/dev/null 2>&1"
+c 0 "config BRAHMA >/dev/null 2>&1"
+c 0 "config BRAHMA.MP >/dev/null 2>&1"
 echo
 
-echo -n Compiling FLASHRD kernel
-cd $kernsrc/compile/FLASHRD
+echo -n Compiling BRAHMA kernel
+cd $kernsrc/compile/BRAHMA
 c 0 "make depend >/dev/null 2>&1"
 c 0 "make >/dev/null 2>&1"
 c 0 cp bsd $tmpmnt/bsd
 echo
 
-echo -n Compiling FLASHRD.MP kernel
-cd $kernsrc/compile/FLASHRD.MP
+echo -n Compiling BRAHMA.MP kernel
+cd $kernsrc/compile/BRAHMA.MP
 c 0 "make depend >/dev/null 2>&1"
 c 0 "make >/dev/null 2>&1"
 c 0 cp bsd $tmpmnt/bsd.mp

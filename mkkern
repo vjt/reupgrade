@@ -91,7 +91,7 @@ cat >> $kernsrc/conf/BRAHMA <<-EOF
 	pseudo-device	rd 1
 	EOF
 
-sed -e 's/GENERIC/BRAHMA/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/BRAHMA.MP
+#sed -e 's/GENERIC/BRAHMA/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/BRAHMA.MP
 
 if [ -f config.strip ]; then
  while read line; do
@@ -124,7 +124,6 @@ echo -n Configuring BRAHMA, BRAHMA.MP kernels
 wd=`pwd`
 cd $kernsrc/conf
 c 0 "config BRAHMA >$T 2>&1"
-c 0 "config BRAHMA.MP >$TMP 2>&1"
 echo
 
 echo -n Compiling BRAHMA kernel
@@ -140,19 +139,6 @@ c 0 "make >/dev/null 2>&1"
 c 0 cp bsd $tmpmnt/bsd
 echo
 
-echo -n Compiling BRAHMA.MP kernel
-cd $kernsrc/compile/BRAHMA.MP
-echo -n " (make depend)"
-c 0 "make depend >/dev/null 2>&1"
-if grep "make clean" $TMP >/dev/null; then
- echo -n " (make clean)"
- c 0 "make clean >/dev/null 2>&1"
-fi
-echo -n " (make)"
-c 0 "make >/dev/null 2>&1"
-c 0 cp bsd $tmpmnt/bsd.mp
-echo
-
 rm $T
 
 ###
@@ -161,4 +147,4 @@ rm $T
 
 cd $wd
 c 0 ./elfrdsetroot $tmpmnt/bsd $szezroot
-c 0 ./elfrdsetroot $tmpmnt/bsd.mp $szezroot
+#c 0 ./elfrdsetroot $tmpmnt/bsd.mp $szezroot

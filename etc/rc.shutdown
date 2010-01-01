@@ -9,7 +9,7 @@ powerdown=NO	# set to YES for powerdown
 
 # Uncomment tardirs if you want to compact dirs on shutdown
 #
-#tardirs="var"
+#tardirs="var home"
 
 if [ ! -z "$tardirs" ]; then
 

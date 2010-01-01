@@ -2,7 +2,7 @@
 
 # DO NOT EDIT THIS SECTION UNLESS YOU INTEND TO MODIFY THE FILESYSTEM BEHAVIOR OF YOUR FLASHRD SYSTEM!!!
 
-tardirs="var"
+tardirs="var home"
 
 if [ ! -f /tmp/.tardirs ]; then
  # /etc/rc runs rc.conf, then /etc/netstart runs it again, but only do this stuff once

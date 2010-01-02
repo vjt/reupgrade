@@ -13,7 +13,7 @@
 #
 # blocks
 
-[ -z "$blocks" ] && blocks=6080
+[ -z "$blocks" ] && blocks=16384
 
 ###
 #
@@ -86,6 +86,7 @@ egrep -v ^config $kernsrc/conf/GENERIC | sed -e 's/GENERIC/BRAHMA/' > $kernsrc/c
 cat >> $kernsrc/conf/BRAHMA <<-EOF
 	option	RAMDISK_HOOKS
 	option	MINIROOTSIZE=$blocks
+  option  NKPTP=8
 	config	bsd	root on rd0a swap on rd0b and wd0b and sd0b
 	pseudo-device	rd 1
 	EOF

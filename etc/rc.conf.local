@@ -13,10 +13,6 @@ if [ ! -f /tmp/.tardirs ]; then
  done
 
  chmod 1777 /tmp
-
- cd /
- git co -f .gitignore
- cd -
 fi
 
 touch /tmp/.tardirs

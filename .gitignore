@@ -3,6 +3,7 @@
 lost+found
 
 /bin
+!/bin/r*
 /boot
 /bsd*
 /dev
@@ -11,6 +12,7 @@ lost+found
 /mnt
 /sbin
 /stand
+!/stand/rc
 /tmp
 /usr
 /var

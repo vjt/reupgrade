@@ -2,7 +2,7 @@
 
 # DO NOT EDIT THIS SECTION UNLESS YOU INTEND TO MODIFY THE FILESYSTEM BEHAVIOR OF YOUR FLASHRD SYSTEM!!!
 
-tardirs="var home"
+tardirs="var home .git"
 
 if [ ! -f /tmp/.tardirs ]; then
  # /etc/rc runs rc.conf, then /etc/netstart runs it again, but only do this stuff once
@@ -13,6 +13,10 @@ if [ ! -f /tmp/.tardirs ]; then
  done
 
  chmod 1777 /tmp
+
+ cd /
+ git co -f .gitignore
+ cd -
 fi
 
 touch /tmp/.tardirs

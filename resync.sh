@@ -17,7 +17,7 @@ RSYNC="rsync -a --devices"
 OLDVER=$1
 NEWVER=$2
 
-. `dirname $0`/refunctions.sh
+. `dirname $0`/reupgrade.sub
 re_check_arguments
 
 rootmail=`mktemp -t rootmail`

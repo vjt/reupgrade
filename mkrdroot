@@ -111,6 +111,7 @@ cd $distloc
 c 1 git gc
 c 1 git prune
 c 1 cp -R $distloc/.git $distloc/.gitignore $tmpmntdir
+c 1 chmod -R go-rwx $tmpmntdir/.git*
 cd - >/dev/null
 
 ###

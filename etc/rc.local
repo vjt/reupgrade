@@ -9,6 +9,11 @@ echo -n 'starting local daemons:'
 
 # Add your local startup actions here.
 
+if [ -x /usr/local/sbin/runsvdir-start ]; then
+  echo -n ' runit';
+  /usr/local/sbin/runsvdir-start &
+fi
+
 echo '.'
 
 # DO NOT EDIT THIS SECTION UNLESS YOU INTEND TO MODIFY THE FILESYSTEM BEHAVIOR OF YOUR FLASHRD SYSTEM!!!

@@ -28,7 +28,7 @@
 #
 # blocks
 
-[ -z "$blocks" ] && blocks=7480
+[ -z "$blocks" ] && blocks=16384
 
 ###
 #

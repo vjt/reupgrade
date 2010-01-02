@@ -13,7 +13,7 @@
 #
 # blocks
 
-[ -z "$blocks" ] && blocks=7480
+[ -z "$blocks" ] && blocks=16384
 
 ###
 #
@@ -90,8 +90,6 @@ cat >> $kernsrc/conf/BRAHMA <<-EOF
 	config	bsd	root on rd0a swap on rd0b and wd0b and sd0b
 	pseudo-device	rd 1
 	EOF
-
-#sed -e 's/GENERIC/BRAHMA/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/BRAHMA.MP
 
 if [ -f config.strip ]; then
  while read line; do

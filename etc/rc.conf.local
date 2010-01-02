@@ -25,10 +25,4 @@ ntpd_flags="-s"
 dhcpd_flags="sis0"
 named_flags=
 
-pf=YES
-rtadvd_flags="sis0"
-ntpd_flags="-s"
-dhcpd_flags="sis0"
-named_flags=
-
 # END

@@ -2,6 +2,10 @@
 .DS_Store
 lost+found
 
+elfrdsetroot
+flashimg.*
+szez.*
+
 /bin
 !/bin/r*
 /boot

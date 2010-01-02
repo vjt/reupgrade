@@ -26,9 +26,15 @@ chroot . mtree -f etc/mtree/BSD.local.dist -e -U -p usr/local
 echo "** Re-installing packages with upgraded ones"
 
 export PKG_PATH="$MIRROR/$NEWVER/packages/`uname -m`"
+
+mv etc/resolv.conf etc/resolv.conf.reupgrade
+cp /etc/resolv.conf etc
+
 for file in var/db/pkg/*; do
   pkg=`basename $file | sed 's#-.*##'`
   echo "* $pkg"
 
   chroot . pkg_add -u $pkg
 done 
+
+mv etc/resolv.conf.reupgrade etc/resolv.conf

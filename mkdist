@@ -231,6 +231,22 @@ c 0 vnconfig -u $device
 
 ###
 #
+# The Git repository
+#
+
+if [ -d $distloc/.git ]
+ cd $distloc
+ c 1 git pull
+ c 1 git gc
+ c 1 git prune
+ c 1 git reflog expire --all --expire=1
+ c 1 chmod -R go-rwx .git*
+ cd - >/dev/null
+fi
+
+
+###
+#
 # TAR loop
 
 if [ ! -z "$tardirs" ]; then

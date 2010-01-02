@@ -96,24 +96,11 @@ c 1 mount /dev/${device}a $tmpmntdir
 #
 # Our ramdisk base
 
-c 2 mkdir $tmpmntdir/bin $tmpmntdir/dev $tmpmntdir/etc $tmpmntdir/home $tmpmntdir/mnt $tmpmntdir/root $tmpmntdir/sbin $tmpmntdir/stand $tmpmntdir/sys $tmpmntdir/tmp $tmpmntdir/usr $tmpmntdir/var $tmpmntdir/flash
+c 2 mkdir $tmpmntdir/bin $tmpmntdir/dev $tmpmntdir/etc $tmpmntdir/home $tmpmntdir/mnt $tmpmntdir/root $tmpmntdir/sbin $tmpmntdir/stand $tmpmntdir/sys $tmpmntdir/tmp $tmpmntdir/usr $tmpmntdir/var $tmpmntdir/flash $tmpmntdir/.git
 
 c 2 cp $distloc/.cshrc $distloc/.profile $distloc/README $tmpmntdir
 
 c 2 cp $distloc/dev/MAKEDEV $tmpmntdir/dev
-
-###
-#
-# The Git repository
-#
-
-cd $distloc
-c 1 git pull
-c 1 git gc
-c 1 git prune
-c 1 cp -R $distloc/.git $distloc/.gitignore $tmpmntdir
-c 1 chmod -R go-rwx $tmpmntdir/.git*
-cd - >/dev/null
 
 ###
 #

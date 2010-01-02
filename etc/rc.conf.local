@@ -2,7 +2,7 @@
 
 # DO NOT EDIT THIS SECTION UNLESS YOU INTEND TO MODIFY THE FILESYSTEM BEHAVIOR OF YOUR FLASHRD SYSTEM!!!
 
-tardirs="var home"
+tardirs="var home .git"
 
 for i in $tardirs; do
  # rc.conf runs early in /etc/rc, and again in /etc/netstart
@@ -19,6 +19,12 @@ done
 
 # XXX one day, track down the cause of this insanity
 chmod 1777 /tmp >/dev/null 2>&1
+
+if [ -f /.git/index ] ; then
+ cd /
+ git co -f .gitignore
+ cd -
+fi
 
 # Insert actual rc.conf.local directives HERE
 #

@@ -108,6 +108,7 @@ c 2 cp $distloc/dev/MAKEDEV $tmpmntdir/dev
 #
 
 cd $distloc
+c 1 git pull
 c 1 git gc
 c 1 git prune
 c 1 cp -R $distloc/.git $distloc/.gitignore $tmpmntdir

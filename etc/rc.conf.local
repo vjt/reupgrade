@@ -21,5 +21,11 @@ done
 chmod 1777 /tmp >/dev/null 2>&1
 
 # Insert actual rc.conf.local directives HERE
+#
+pf=YES
+rtadvd_flags="sis0"
+ntpd_flags="-s"
+dhcpd_flags="sis0"
+named_flags=
 
 # END

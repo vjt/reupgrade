@@ -38,3 +38,6 @@ for file in var/db/pkg/*; do
 done 
 
 mv etc/resolv.conf.reupgrade etc/resolv.conf
+
+echo "** Re-generating pwd.db and spwd.db"
+pwd_mkdb -p -d ./etc master.passwd

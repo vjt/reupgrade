@@ -29,14 +29,7 @@ export PKG_PATH="$MIRROR/$NEWVER/packages/`uname -m`"
 
 mv etc/resolv.conf etc/resolv.conf.reupgrade
 cp /etc/resolv.conf etc
-
-for file in var/db/pkg/*; do
-  pkg=`basename $file | sed 's#-.*##'`
-  echo "* $pkg"
-
-  chroot . pkg_add -u $pkg
-done 
-
+chroot . pkg_add -u
 mv etc/resolv.conf.reupgrade etc/resolv.conf
 
 echo "** Re-generating pwd.db and spwd.db"

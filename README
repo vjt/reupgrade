@@ -1,0 +1,5 @@
+ReUpgrade is a work in progress to manage BSD upgrades using git rebase.
+
+TODO: initialization scripts, documentation
+
+ -- vjt  Sat Jan  2 01:20:47 CET 2010

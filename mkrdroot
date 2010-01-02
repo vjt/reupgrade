@@ -111,7 +111,7 @@ cd $tmpmntdir/dev
 c 2 ./MAKEDEV all
 
 i=10
-while [ $i -le 511 ]; do
+while [ $i -le 127 ]; do
  c 2 ./MAKEDEV bpf$i
  let i=i+1
 done

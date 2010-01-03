@@ -1,0 +1,132 @@
+#!/bin/ksh
+#
+# flashrd mkkern
+#
+# create luscious ramdisk version of GENERIC
+#
+# Chris Cappuccio <chris@nmedia.net>
+#
+
+[ -z "$tmpmnt" ] && tmpmnt=`mktemp -d /tmp/mkkern.XXXXXXXX`
+
+###
+#
+# blocks
+
+[ -z "$blocks" ] && blocks=6080
+
+###
+#
+# rdrootfs
+
+if [ -z "$szezroot" -a -z "$1" ]; then
+ echo "% mkkern <$blocks rdrootfs>"
+ exit 1
+fi
+
+[ -z "$szezroot" ] && szezroot=$1
+
+if [ ! -f $szezroot ]; then
+ echo % $szezroot is not a file
+ exit 1
+fi
+
+###
+#
+# kernel source
+
+[ -z "$kernsrc" ] && kernsrc=/usr/src/sys/arch/`uname -m`
+
+if [ ! -d $kernsrc ]; then
+ echo % $kernsrc not found
+ exit 1
+fi
+
+###
+#
+# elfrdsetroot
+
+[ -z "$elfrdsetroot" ] && elfrdsetroot=./elfrdsetroot.c
+
+if [ ! -f $elfrdsetroot ]; then
+ echo % $elfrdsetroot not found
+ exit 1
+fi
+
+###
+#
+# GENERIC config
+
+if [ ! -f $kernsrc/conf/GENERIC ]; then
+ echo % $kernsrc/conf/GENERIC config not found
+ exit 1
+fi
+
+###
+#
+# exit 1 harness
+
+0() {
+ exit 1
+}
+
+. ./flashrd.sub
+
+###
+#
+# remove option POOL_DEBUG from /usr/src/sys/conf/GENERIC (slower allocation!)
+# modify /usr/src/sys/arch/`uname -m`/conf/GENERIC
+
+grep -v POOL_DEBUG /usr/src/sys/conf/GENERIC > /usr/src/sys/conf/BRAHMA
+# if you want POOL_DEBUG, do this instead:
+#cp /usr/src/sys/conf/GENERIC /usr/src/sys/conf/BRAHMA
+
+egrep -v ^config $kernsrc/conf/GENERIC | sed -e 's/GENERIC/BRAHMA/' > $kernsrc/conf/BRAHMA
+
+cat >> $kernsrc/conf/BRAHMA <<-EOF
+	option	RAMDISK_HOOKS
+	option	MINIROOTSIZE=$blocks
+	config	bsd	root on rd0a swap on rd0b and wd0b and sd0b
+	pseudo-device	rd 1
+	EOF
+
+#sed -e 's/GENERIC/BRAHMA/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/BRAHMA.MP
+
+###
+#
+# compile ELFRDSETROOT first (so we can bail out if it fails without waiting for GENERIC)
+
+c 0 cc -o ./elfrdsetroot $elfrdsetroot
+
+###
+#
+# compile our version of GENERIC
+
+echo -n Configuring BRAHMA kernel
+wd=`pwd`
+cd $kernsrc/conf
+c 0 "config BRAHMA >/dev/null 2>&1"
+#c 0 "config BRAHMA.MP >/dev/null 2>&1"
+echo
+
+echo -n Compiling BRAHMA kernel
+cd $kernsrc/compile/BRAHMA
+c 0 "make depend >/dev/null 2>&1"
+c 0 "make >/dev/null 2>&1"
+c 0 cp bsd $tmpmnt/bsd
+echo
+
+#echo -n Compiling BRAHMA.MP kernel
+#cd $kernsrc/compile/BRAHMA.MP
+#c 0 "make depend >/dev/null 2>&1"
+#c 0 "make >/dev/null 2>&1"
+#c 0 cp bsd $tmpmnt/bsd.mp
+#echo
+
+###
+#
+# run elfrdsetroot
+
+cd $wd
+c 0 ./elfrdsetroot $tmpmnt/bsd $szezroot
+#c 0 ./elfrdsetroot $tmpmnt/bsd.mp $szezroot

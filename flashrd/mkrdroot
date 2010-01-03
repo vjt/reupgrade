@@ -1,0 +1,155 @@
+#!/bin/ksh
+#
+# flashrd mkrdroot
+#
+# create the kernel ramdisk
+#
+# this environment (and custom rc) is for setting up vnds
+# so that we can mount the system and pass to real /etc/rc
+#
+# Chris Cappuccio <chris@nmedia.net>
+#
+
+# Files copied to /stand for stand-alone usage
+#
+
+[ -z "$standcopy" ] && standcopy="bin/tar sbin/vnconfig sbin/umount"
+
+# Stuff that needs to be in place on the ramdisk
+#
+
+[ -z "$bincopy" ] && bincopy="bin/sh"
+
+[ -z "$sbincopy" ] && sbincopy="sbin/init sbin/mount sbin/mount_ffs sbin/fsck sbin/fsck_ffs"
+
+[ -z "$etccopy" ] && etccopy="etc/login.conf etc/pwd.db"
+
+###
+#
+# blocks
+
+[ -z "$blocks" ] && blocks=6080
+
+###
+#
+# rdrootfs, device, distloc
+
+[ -z "$szezroot" ] && szezroot=szez.`uname -m`-`date +%Y%m%d`
+
+[ -z "$device" ] && device=svnd0
+
+if [ -z "$distloc" -a -z "$1" ]; then
+ echo "% mkrdroot <openbsd base>"
+ exit 1
+fi
+
+[ -z "$distloc" ] && distloc=$1
+
+###
+#
+# fall back
+
+2() {
+ umount -f $tmpmntdir
+}
+1() {
+ vnconfig -u $device
+}
+0() {
+ exit 1
+}
+
+. ./flashrd.sub
+
+if [ ! -f $distloc/dev/MAKEDEV ]; then
+ echo % $distloc/dev/MAKEDEV not found
+ exit 1
+fi
+
+echo Creating ramdisk rootfs
+
+###
+#
+# dd, vnconfig, disklabel, newfs
+
+c 0 "dd if=/dev/zero of=$szezroot bs=512 count=$blocks >/dev/null 2>&1"
+
+c 0 vnconfig $device $szezroot
+
+tmplabel=`mktemp /tmp/mkrdrootlabel.XXXXXXXXX`
+tmpmntdir=`mktemp -d /tmp/mkrdroot.XXXXXXXXX`
+
+c 1 "disklabel $device > $tmplabel 2>/dev/null"
+
+totalsize=`awk -F: ' /^total sectors:/ {print $2} ' $tmplabel`
+cat >>$tmplabel <<-EOF
+	a: $totalsize   0   4.2BSD  1024    8192    16
+	EOF
+
+c 1 "disklabel -R $device $tmplabel >/dev/null 2>&1"
+
+c 1 "newfs -m 0 -o space -i 1024 /dev/r${device}a >/dev/null 2>&1"
+
+c 1 mount /dev/${device}a $tmpmntdir
+
+###
+#
+# Our ramdisk base
+
+c 2 mkdir $tmpmntdir/bin $tmpmntdir/dev $tmpmntdir/etc $tmpmntdir/home $tmpmntdir/mnt $tmpmntdir/root $tmpmntdir/sbin $tmpmntdir/stand $tmpmntdir/sys $tmpmntdir/tmp $tmpmntdir/usr $tmpmntdir/var $tmpmntdir/flash $tmpmntdir/.git
+
+c 2 cp $distloc/.cshrc $distloc/.profile $distloc/README $tmpmntdir
+
+c 2 cp $distloc/dev/MAKEDEV $tmpmntdir/dev
+
+###
+#
+# Devices with an extra touch of bpf (normal distribution has bpf0-bpf9, so create starting at bpf10)
+
+wd=`pwd`
+cd $tmpmntdir/dev
+c 2 ./MAKEDEV all
+
+i=10
+while [ $i -le 127 ]; do
+ c 2 ./MAKEDEV bpf$i
+ let i=i+1
+done
+cd $wd
+
+###
+#
+# Copy specific items to kernel ramdisk
+
+echo -n Copying items to ramdisk rootfs
+
+for i in $standcopy; do
+ echo -n " $i"
+ c 2 cp $distloc/$i $tmpmntdir/stand
+done
+for i in $bincopy; do
+ echo -n " $i"
+ c 2 cp $distloc/$i $tmpmntdir/bin
+done
+for i in $sbincopy; do
+ echo -n " $i"
+ c 2 cp $distloc/$i $tmpmntdir/sbin
+done
+for i in $etccopy; do
+ echo -n " $i"
+ c 2 cp $distloc/$i $tmpmntdir/etc
+done
+
+echo
+
+###
+#
+# Copy custom rc to kernel ramdisk, cleanup
+
+c 2 cp etc/rc $tmpmntdir/etc/rc
+
+c 2 cp stand/rc $tmpmntdir/stand/rc
+
+umountwait 1 $tmpmntdir
+
+c 0 vnconfig -u $device

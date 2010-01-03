@@ -1,0 +1,33 @@
+ReUpgrade + Git-enabled flashrd
+===============================
+
+I use this set of scripts, based on git and flashrd, to manage
+both configuration and upgrades of ours (vjt ++ nhaima) lovely
+embedded OpenBSD gateway, running onto a Soekris net4801.
+
+Documentation is yet to be written, but the general picture is
+to prepare an image using a modified flashrd that handles .git
+repositories and keep into them the whole configuration.. into
+separate branches.
+
+You should have an "upstream/4.X" version, upon which you base
+your configuration, say, "brahma/4.X". When an upgrade occurs,
+you simply revert your configuration to the upstream one via a
+git checkout, untar the distribution packages and commit every
+change. Then you checkout back your configuration into a shiny
+new branch and rebase it onto the new upstream configuration.
+
+This whole stuff is handled by rebase.sh.. while all the other
+scripts serve syncing and finalization.
+
+I plan on writing a comprehensive tutorial once this system is
+solid and battle-tested: for now you have all the code :-) and
+the commit message 096ed3a193bfc615bbd103d0db278e681aaca3f8 to
+get started. Please note that I plan to do "hot" upgrades thus
+without requiring to copy the embedded machine directory trees
+back and forth to another OpenBSD machine.
+
+Have fun, and stay tuned! :-)
+
+- vjt@openssl.it
+Sun Jan  3 18:51:37 CET 2010

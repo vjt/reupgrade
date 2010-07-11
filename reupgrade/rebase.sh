@@ -28,7 +28,7 @@ echo "* Rebasing $OLDVER changes onto $NEWVER"
 git checkout "$NAME/$OLDVER"
 git checkout -b "$NAME/$NEWVER"
 
-if git rebase upstream/$NEWVER
+if git rebase upstream/$NEWVER; then
   echo "* Complete without conflicts: this must be your lucky day!"
 else
   echo "! Rebase conflicts, please cd to ../$NEWVER and fix them"

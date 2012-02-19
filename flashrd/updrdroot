@@ -1,0 +1,6 @@
+#!/bin/sh
+
+#./mkrdroot $1
+#./elfrdsetroot bsd szez.XXX.YYY
+#config -e -f 
+#edit wd* flags ffc

@@ -9,7 +9,7 @@
 # -t target-disk causes this script to write directly to a disk instead of
 # a new VND image.  This may be useful if you want to write a small image
 # to a large flash without overwriting the unused space (which can be rather
-# slow).  This is as fast as running flashrd, without requiring
+# slow).  This is as fast as running flashrd, without requiring 
 # the source files from flashrd.
 #
 # Growimg.sh might be useful if you have a stable, tested image that you want
@@ -68,7 +68,7 @@ if [ "$1" == "-t" ]; then
  if [ ! -b $alt ]; then
   echo "$device($alt) is an invalid disk device, not found or not block device"
   exit 1
- fi
+ fi 
  shift
  shift
 fi
@@ -86,9 +86,9 @@ biosboot=/usr/mdec/biosboot
 mbr=/usr/mdec/mbr
 
 if [ -z "$device" ]; then
- device=svnd0
+ device=vnd0
 fi
-device2=svnd1
+device2=vnd1
 image=$4
 
 cylinders=$1
@@ -122,7 +122,7 @@ if [ "$bytessec" -le 1024 ]; then
  echo Requested size: $((totalsize / 1024 / (1024 / bytessec)))MB
  echo Size increase: $((addon / 1024 / (1024 / bytessec)))MB
 fi
-echo
+echo 
 
 if [ -z "$alt" ]; then
  freespace=`df . | tail -1 | awk ' { print $4 } '`
@@ -133,7 +133,7 @@ if [ -z "$alt" ]; then
   factor=$((bytessec / 512))
   freespace=$((freespace / factor))
  fi
-
+ 
  # The new image will not take more disk space than the old one, in fact
  # it will take less.  But it will appear to use more when dd reads it.
  # vnd will create holes in the file for the blank space so we don't have
@@ -162,8 +162,7 @@ NewDir=`mktemp -d newdir.XXXXX`
 if ! mount -o rdonly /dev/"$device2"a $OldDir; then
  echo mount old image failed
  vnconfig -u $device2
- rm -f $NewImg $NewLabel
- rmdir $OldDir $NewDir
+ rm -f $NewImg $NewLabel $OldDir $NewDir
  exit 1
 fi
 
@@ -173,6 +172,10 @@ egrep -v "^total sectors:|^bytes/sector:|^sectors/track:|^sectors/cylinder:|^tra
 
 apart=$((totalsize - sectorstrack))
 
+# This probably isn't important as of OpenBSD 4.8 because disklabel
+# now ignores geometry specified by -R command.  Flag for removal
+# after further analysis. XXX
+#
 cat <<-__New >>$NewLabel
 	total sectors: $totalsize
 	bytes/sector: $bytessec
@@ -193,8 +196,7 @@ if [ -z "$alt" ]; then
  if ! vnconfig $device $NewImg; then
   echo % vnconfig failure
   vnconfig -u $device2
-  rm $NewImg $NewLabel
-  rmdir $OldDir $NewDir
+  rm $NewImg $NewLabel $OldDir $NewDir
   exit 1
  fi
 fi
@@ -222,8 +224,7 @@ if ! mount -o async /dev/"$device"a $NewDir; then
   vnconfig -u $device
  fi
  vnconfig -u $device2
- rmdir $OldDir $NewDir
- rm -f $NewImg
+ rm -f $NewImg $NewLabel $OldDir $NewDir
  exit 1
 fi
 
@@ -243,7 +244,7 @@ if [ "$FreeBlocks" -le "$UsedBlocks" ]; then
    vnconfig -u $device
   fi
   vnconfig -u $device2
-  rm -f $NewImg $NewLabel
+  rm -f $NewImg $NewLabel 
   rmdir $OldDir $NewDir
   exit 1
 fi
@@ -280,7 +281,7 @@ else
 fi
 echo
 
-rmdir $NewDir $OldDir
+rm -r $NewDir $OldDir
 rm $NewLabel
 
 exit 0

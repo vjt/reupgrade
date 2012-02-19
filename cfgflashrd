@@ -1,0 +1,474 @@
+#!/bin/ksh
+#
+# flashrd image configurator
+#
+# Chris Cappuccio <chris@nmedia.net>
+
+vnddirs="root bin etc sbin usr" # must match vnddirs= in flashrd and stand/rc
+rootdevice=vnd2
+device=vnd3
+
+set -A part a d e f g h i j k l m n o p
+
+if [ `id -u` != 0 ]; then
+ echo Sorry, mount, vnconfig, and friends require root privileges
+ exit 1
+fi
+
+if [ "$1" == "-disk" ]; then
+ rootdevice="$2"
+ novnd=1
+ shift
+ shift
+fi
+
+if [ "$1" == "-image" ]; then
+ dest="$2"
+ shift
+ shift
+fi
+
+if [ "$1" == "-rdroot" ]; then
+ if [ ! -f "$2" ]; then
+  echo % rdroot $2 not found
+  exit 1
+ fi
+ rdfs=$2
+ shift
+ shift
+fi
+
+if [ "$1" == "-com0" ]; then
+ if [ -z "$2" ]; then
+  echo "% no speed for com0??"
+  exit 1
+ fi
+ if [ "$2" -lt 1200 -o "$2" -gt 115200 ]; then
+  echo "% com0 speed $2 unlikely"
+  exit 1
+ fi
+ com0="$2"
+ shift
+ shift
+fi
+
+if [ "$1" == "-sp" ]; then
+ bsdassp=1
+ shift
+fi
+
+if [ "$1" == "-mp" ]; then
+ bsdasmp=1
+ shift
+fi
+
+if [ "$1" == "-tz" ]; then
+ shift
+ if [ -z "$1" ]; then
+  echo "% tzfile not specified"
+  exit 1
+ fi
+ tzfile="$1"
+ shift
+ if [ ! -f /usr/share/zoneinfo/$tzfile -a ! -f $tzfile ]; then
+  echo "tzfile /usr/share/zoneinfo/$tzfile (and $tzfile) not found"
+  exit 1
+ fi
+fi
+
+vncfgroot() {
+ [ -z "$novnd" ] && c 0 vnconfig $rootdevice $1
+}
+
+vnuncfgroot() {
+ [ -z "$novnd" ] && c 0 vnconfig -u $rootdevice
+}
+
+###
+#
+# fall back
+
+4() {
+ umount -f $tmpmntvnd
+}
+3() {
+ vnconfig -u $device
+}
+2() {
+ umount -f $tmpmnt
+}
+1() {
+ vnuncfgroot
+}
+0() {
+ exit 1
+}
+
+. ./flashrd.sub
+
+###
+#
+# usage
+ 
+if [ -z "$dest" -a -z "$novnd" ]; then
+ cat <<-EOF
+	% cfgflashrd [-disk "dev" | -image "filename"] [-rdroot "filename"] [-com0 "speed"] [-mp] [-tz "tzfile"]
+	  use -disk to configure an attached disk
+	  "dev" as in wd2, sd3, etc...
+ 	  or, use -image to configure a disk image
+	  use -rdroot flag if you have an rdrootfs image and want to change disk parameters on it
+	  use -com0 flag if you want to direct console from vga to com0 at "speed" speed
+	  use -mp to set bsd.mp as primary kernel, if exists (shifting bsd to bsd.sp)
+	  use -tz to copy /usr/share/zoneinfo/"tzfile" to destination image /etc/localtime
+	EOF
+ exit 1
+fi
+
+if [ -z "$novnd" -a ! -f "$dest" ]; then
+ echo % image $dest not found
+ exit 1
+fi
+
+if [ ! -b /dev/"$rootdevice"a ]; then
+ echo % device /dev/"$rootdevice"a not found
+ exit 1
+fi
+
+###
+#
+# mount vnd or disk
+ 
+vncfgroot $dest
+   
+tmpmnt=`mktemp -d /tmp/cfgflashrd.XXXXXXXX` # vnd/disk mount point
+tmpmntvnd=`mktemp -d /tmp/cfgflashrd.XXXXXXXX` # openbsd.vnd partition mount point
+
+c 1 fsck -p /dev/${rootdevice}a
+ 
+c 1 mount /dev/${rootdevice}a $tmpmnt
+
+if [ ! -z "$rdfs" ]; then
+
+ ###
+ #
+ # if user wants to modify kernel ramdisk, ready elfrdsetroot, mount vnd, change stand/rc, elfrdsetroot actual kernels
+
+ if [ -z "$elfrdsetroot" ]; then
+  elfrdsetroot=./elfrdsetroot.c
+ fi
+
+ if [ ! -f $elfrdsetroot ]; then
+  echo % $elfrdsetroot not found
+  2; 1; 0;
+ fi
+
+ ###
+ #
+ # compile ELFRDSETROOT
+
+ c 2 cc -o ./elfrdsetroot $elfrdsetroot
+
+ c 2 vnconfig $device $rdfs
+
+ c 3 fsck -p /dev/${device}a
+
+ c 3 mount /dev/${device}a $tmpmntvnd
+
+ cholo=`egrep ^disk= $tmpmntvnd/stand/rc`
+ if [ -z "$cholo" ]; then
+  echo % no disk= line found in $tmpmntvnd/stand/rc, aborting
+  4; 3; 2; 1; 0;
+ fi
+
+ ch1=${cholo#disk=}
+ echo Current image device ${ch1%a}
+
+ getphys()
+ {
+  read phys?"New physical device name (as seen by destination system)? "
+  if [ ! -b /dev/"$phys"a ]; then
+   echo /dev/"$phys"a appear to be nonsense, try again
+   getphys
+  fi
+ }
+ getphys
+ 
+ temp=`mktemp /tmp/cfgflashrd.XXXXXXXX`
+ c 4 "sed -e 's/$cholo/disk=${phys}a/' < $tmpmntvnd/stand/rc > $temp"
+
+ c 4 mv $temp $tmpmntvnd/stand/rc
+
+ c 3 umount $tmpmntvnd
+
+ c 2 vnconfig -u $device
+ 
+ echo Setting ramdisk root image
+ elfrdarch=`file ./elfrdsetroot | awk -F, ' { print $2 } '`
+
+ for i in bsd bsd.mp bsd.sp; do
+  if [ -f $tmpmnt/$i ]; then
+   bsdarch=`file $tmpmnt/$i | awk -F, ' { print $2 } '`
+   if [ "$bsdarch" != "$elfrdarch" ]; then
+    echo "% elfrdsetroot architecture mismatch (kernel $bsdarch, but elfrdsetroot is $elfrdarch)"
+    2; 1; 0;
+   fi
+   c 2 ./elfrdsetroot $tmpmnt/$i $rdfs
+   cfgbsd=1
+  fi
+ done
+
+ if [ -z "$cfgbsd" ]; then
+  echo % none of bsd bsd.mp bsd.sp kernel found at flash image.  how odd?
+  2; 1; 0;
+ fi
+
+ if [ "$bsdassp" == "1" ]; then
+  if [ -f $tmpmnt/bsd.sp ]; then
+   mv $tmpmnt/bsd $tmpmnt/bsd.mp
+   mv $tmpmnt/bsd.sp $tmpmnt/bsd
+  else
+   echo "[bsd.sp not found, primary kernel may already be single processor]"
+  fi
+ fi
+
+ if [ "$bsdasmp" == "1" ]; then
+  if [ -f $tmpmnt/bsd.mp ]; then
+   mv $tmpmnt/bsd $tmpmnt/bsd.sp
+   mv $tmpmnt/bsd.mp $tmpmnt/bsd
+  else
+   echo "[bsd.mp not found, primary kernel may already by multi-processor]"
+  fi
+ fi
+
+ rm -f $temp
+fi
+
+if [ ! -z "$com0" ]; then
+ echo Installing boot.conf for com0 at $com0 baud
+ mkdir -p $tmpmnt/etc
+ cat <<-EOF >$tmpmnt/etc/boot.conf
+	stty com0 $com0
+	set tty com0
+	set timeout 5
+	EOF
+fi 
+
+###
+#
+# mount running filesystem for other types of changes
+
+c 2 vnconfig $device $tmpmnt/openbsd.vnd
+
+###
+#
+# map $vnddirs etc to a partition label, mount
+
+x=0
+for i in $vnddirs; do
+ if [ $i == etc ]; then
+  etcpart=${part[$x]}
+ fi
+ let x=x+1
+done
+
+if [ -z "$etcpart" ]; then
+ echo "% missing etc in \$vnddirs ($vnddirs) aborting"
+ 3; 2; 1; 0;
+fi
+
+c 3 fsck -p /dev/$device$etcpart
+
+c 3 mount /dev/$device$etcpart $tmpmntvnd
+
+if [ ! -f $tmpmntvnd/.flashrd_version ]; then
+ echo % missing etc/.flashrd_version, not flashrd image or \$vnddirs out of sync? what funky?
+fi
+
+if [ ! -z "$com0" ]; then
+ tmpttys=`mktemp /tmp/cfgflashrd.XXXXXXXX`
+ echo Modifying /etc/ttys for tty00 at $com0 baud
+ # Turn off ttyC consoles, turn on com0
+ # partially gleaned from install.sub
+ sed	-e "/^tty00/s/std.[0-9]*/std.${com0}/"	\
+	-e "/^tty00/s/unknown/vt220	/"	\
+	-e "/^tty00/s/off.*/on secure/"		\
+	-e "/^ttyC/s/on.*secure/off/" $tmpmntvnd/ttys > $tmpttys
+ c 4 mv $tmpttys $tmpmntvnd/ttys
+fi
+
+if [ ! -z "$rdfs" ]; then
+ # set root partition in fstab for /flash partition, based on rdroot answer
+ if [ -f $tmpmntvnd/fstab ]; then
+  deltoro=`awk ' /\/flash/ {print $1} ' $tmpmntvnd/fstab`
+  if [ ! -z "$deltoro" ]; then
+   curdisk=${deltoro#/dev/}
+   curdisk=${curdisk%a}
+   echo Old fstab /flash device $deltoro, new device /dev/"$phys"a
+   # here we assume the physical device for /flash isn't going to overlap with vnd0 or rd0
+   sed -e "s%$deltoro%/dev/"$phys"a%" < $tmpmntvnd/fstab > $temp
+   mv $temp $tmpmntvnd/fstab
+  else
+   echo % fstab has no /flash partition, not flashrd image? abort
+   4; 3; 2; 1; 0;
+  fi
+ else
+  echo % missing etc/fstab, not flashrd image or \$vnddirs out of sync with image? abort
+  4; 3; 2; 1; 0;
+ fi
+fi
+
+###
+#
+# set hostname
+
+getname()
+{
+ read hostname?"Hostname: "
+ if [ -z "$hostname" ]; then
+  echo "Nothing entered? Try again."
+  getname
+ fi
+}
+
+if [ -z "$hostname" ]; then
+ echo
+ echo Please assign a system hostname...
+ getname
+fi
+
+echo $hostname > $tmpmntvnd/myname
+
+###
+#
+# set root password
+
+getpass()
+{
+ stty -echo
+ read pw1?"Password:"
+ echo
+ read pw2?"Verify:"
+ echo
+ stty echo
+
+ if [ "$pw1" == "$pw2" ]; then
+  password="$pw1"
+ fi
+ if [ -z "$password" ]; then
+  echo "Passwords don't match or password was empty.  Try again."
+  getpass
+ fi
+}
+
+if [ -z "$encpass" ]; then
+ if [ -z "$password" ]; then
+  echo
+  echo Please assign a root password...
+  getpass
+  echo
+ fi
+fi
+
+if [ -z "$encpass" ]; then
+ encpass=`echo $password | /usr/bin/encrypt -b 8`
+fi
+
+tmppass=`mktemp /tmp/cfgflashrd.XXXXXXXX`
+
+echo -n "root:$encpass" > $tmppass
+
+awk -F : '/^root/ \
+{ printf(":%s:%s:%s:%s:%s:%s:%s:%s\n", $3, $4, $5, $6, $7, $8, $9, $10) }' \
+< $tmpmntvnd/master.passwd >> $tmppass
+
+c 4 "egrep -v '^root:' < $tmpmntvnd/master.passwd >> $tmppass"
+
+c 4 mv $tmppass $tmpmntvnd/master.passwd
+
+c 4 pwd_mkdb -p -d $tmpmntvnd $tmpmntvnd/master.passwd
+
+###
+#
+# steal ntp servers from local ntpd.conf!
+
+if [ -f $tmpmntvnd/ntpd.conf ]; then
+ if [ -z "$ntpervers" ]; then
+  ntpservers=`awk ' /^server/ { print $2 } ' /etc/ntpd.conf | tr '\n' ' '`
+  read nntpservers?"NTP Servers: [$ntpservers] "
+  if [ ! -z "$nntpservers" ]; then
+   ntpservers="$nntpservers"
+  fi
+ fi
+
+ if [ ! -z "$ntpservers" ]; then
+  echo Configuring ntpd.conf for NTP servers $ntpservers
+   egrep -v ^server $tmpmntvnd/ntpd.conf > $tmppass
+   for i in $ntpservers; do
+     c 4 "echo servers $i >> $tmppass"
+   done
+   c 4 mv $tmppass $tmpmntvnd/ntpd.conf
+ fi
+fi
+
+###
+#
+# steal dns servers from local resolv.conf!
+
+if [ -z "$dnsservers" ]; then
+ dnsservers=`awk ' /^nameserver/ { print $2 } ' /etc/resolv.conf | tr '\n' ' '`
+ read ndnsservers?"DNS Servers: [$dnsservers] " 
+ if [ ! -z "$ndnsservers" ]; then
+  dnsservers="$ndnsservers"
+ fi
+fi
+
+if [ ! -z "$dnsservers" ]; then
+ echo Configuring resolv.conf for DNS servers $dnsservers
+ c 4 "echo lookup file bind > $tmpmntvnd/resolv.conf"
+ for i in $dnsservers; do
+  c 4 "echo nameserver $i >> $tmpmntvnd/resolv.conf"
+ done
+else
+ echo Failed to configure nameservers, you must manually configure /etc/resolv.conf
+fi
+
+###
+#
+# tzfile
+
+if [ ! -z "$tzfile" ]; then
+ if [ -f /usr/share/zoneinfo/$tzfile ]; then
+  rm $tmpmntvnd/localtime
+  cp /usr/share/zoneinfo/$tzfile $tmpmntvnd/localtime
+ else
+  if [ -f $tzfile ]; then
+   rm $tmpmntvnd/localtime
+   cp $tzfile $tmpmntvnd/localtime
+  fi
+ fi
+fi
+
+###
+#
+# this is the end
+
+c 3 umount $tmpmntvnd
+
+###
+#
+# done with the main disk vnd
+
+c 2 vnconfig -u $device
+
+c 1 umount $tmpmnt
+
+###
+#
+# done with flash img vnd
+
+vnuncfgroot
+
+rmdir $tmpmnt $tmpmntvnd
+rm -f $tmppass
+
+echo Done

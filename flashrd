@@ -1,0 +1,277 @@
+#!/bin/ksh 
+#
+# flashrd initializer with default vnd image destination (or disk destination on demand)
+#
+# Chris Cappuccio <chris@nmedia.net>
+
+date=`date +%Y%m%d`
+arch=`uname -m`
+vers=20110421
+
+export device=vnd3	# least likely to conflict ?
+export rootdevice=vnd2	# used to mount flash vnd for writing of stuff inside
+export blocks=7480	# blocks to reserve for kernel ramdisk
+export szezroot=szez.$arch-$date	# 7480 flash root
+export dest=flashimg.$arch-$date	# final product
+
+export vnddirs="root bin etc sbin usr"	# must match vnddirs= in stand/rc and fstab
+export vndsize="102400 auto 102400 auto auto"	# min partition sizes (or auto) (in 512 byte sectors)
+
+export tardirs="var"			# must match tardirs= in stand/rc and rc.conf.local
+set -A tarsize 65536			# mfs sizes for tar dirs (in 512 byte sectors)
+
+export mfsdirs="tmp"			# mfs-only dirs
+set -A mfssize 16384			# mfs sizes (in 512 byte sectors)
+
+set -A part a d e f g h i j k l m n o p
+
+# C/H/S for default "1GB" image, used by mkboot
+#
+# This is specified to get 63 sectors/track, therefore boot
+# blocks work properly on most "disks" without resizing image!
+#
+# Completely ignored if -disk is specified
+export cylinders=968
+export trackscylinder=32
+export sectorstrack=63
+#
+# Normally 512 (but, who knows, times they are a changin'!)
+export bytessec=512
+
+echo "flashrd $vers chris@nmedia.net"
+
+if [ "$1" == "-disk" ]; then
+ shift
+ export rootdevice="$1"
+ export novnd=1
+ shift
+fi
+
+vncfgroot() {
+ [ -z "$novnd" ] && c 0 vnconfig $rootdevice $1
+}
+
+vnuncfgroot() {
+ [ -z "$novnd" ] && c 0 vnconfig -u $rootdevice
+}
+ 
+echo
+
+if [ `id -u` != 0 ]; then
+ echo Sorry, mount, vnconfig, and friends require root privileges
+ exit 1
+fi
+
+if [ -z "$1" -a -z "$distloc" ]; then
+ cat <<-EOF
+	% flashrd [-disk "dev"] <openbsd base>
+	  system will create flash image file in absence of -disk name
+	  "dev" can be wd3, sd2, etc...
+	EOF
+ exit 1
+fi
+
+if [ -z "$distloc" ]; then
+ export distloc=$1
+ shift
+fi
+
+if [ ! -d "$distloc" ]; then
+ echo % $distloc is not a directory
+ exit 1
+else
+ if [ ! -f "$distloc"/etc/services ]; then
+  echo % $distloc does not contain an unpacked etcXX.tgz file
+  exit 1
+ fi
+ if [ ! -f "$distloc"/bin/ksh ]; then
+  echo % $distloc does not contain an unpacked baseXX.tgz file
+  exit 1
+ fi
+ if [ ! -u "$distloc"/usr/bin/passwd ]; then
+  echo "% $distloc was not unpacked with tar p flag (to preserve permissions),"
+  echo "or it was not unpacked as root (to allow set ownership)"
+  exit 1
+ fi
+fi
+
+###
+#
+# fall back
+
+4() {
+ umount $tmpmntvnd
+}
+3() {
+ vnconfig -u $device
+}
+2() {
+ umount $tmpmnt
+}
+1() {
+ vnuncfgroot
+}
+0() {
+ exit 1
+}
+
+. ./flashrd.sub
+
+###
+#
+# generate kernel ramdisk
+
+c 0 ./mkrdroot
+
+# $szezroot should now have a ramdisk image
+
+###
+#
+# generate boot image
+
+c 0 ./mkboot
+
+# $dest should now have a boot image
+
+export tmpmnt=`mktemp -d /tmp/flashrd.XXXXXXXX`
+
+vncfgroot $dest
+
+c 1 mount /dev/"$rootdevice"a $tmpmnt
+
+###
+#
+# generate kernel
+
+c 2 ./mkkern
+
+###
+#
+# generate vnd, tar files 
+
+c 2 ./mkdist
+
+###
+#
+# Build fstab
+
+tmpfstab=`mktemp /tmp/flashrdfstab.XXXXXXXX`
+
+cat <<-EOF >$tmpfstab
+	/dev/rd0a	/	ffs	rw	1 0
+	/dev/wd0a	/flash	ffs	rw,noatime,nodev,nosuid	1 0
+	EOF
+
+x=0
+for i in $vnddirs; do
+ case $i {
+ sbin)
+  opts=noatime,nodev
+  ;;
+ usr)
+  opts=noatime,nodev
+  ;;
+ *)
+  opts=noatime,nodev,nosuid
+  ;;
+ }
+ echo  "/dev/vnd0${part[$x]}	/$i	ffs	rw,$opts	1 0" >> $tmpfstab
+ let x=x+1
+done
+
+x=0
+if [ ! -z "$tardirs" ]; then
+ for i in $tardirs; do
+  echo "swap	/$i	mfs	rw,nodev,nosuid,-s${tarsize[$x]}	0 0" >> $tmpfstab
+  let x=x+1
+ done
+fi
+
+if [ $x -ne ${#tarsize[*]} ]; then
+ echo "% \$tardirs count ($x) different than tarsize array count ${#tarsize[*]}, aborting"
+ 2; 1; 0;
+fi
+
+x=0
+if [ ! -z "$mfsdirs" ]; then
+ for i in $mfsdirs; do
+  echo
+  echo "swap		/$i	mfs	rw,nodev,nosuid,-s${mfssize[$x]}	0 0" >> $tmpfstab
+  let x=x+1
+ done
+fi
+
+if [ $x -ne ${#mfssize[*]} ]; then
+ echo "% \$mfsdirs count ($x) different than mfssize array count ${#mfssize[*]}, aborting"
+ 2; 1; 0;
+fi
+
+###
+#
+# Copy in fstab, etc/rc.conf.local, bin/ro bin/rw to vnd
+
+tmpmntvnd=`mktemp -d /tmp/flashrd.XXXXXXXX` # openbsd.vnd image mount point
+
+c 2 vnconfig $device $tmpmnt/openbsd.vnd
+
+###
+#
+# map $vnddirs etc to a partition label
+
+x=0
+for i in $vnddirs; do
+ if [ $i == etc ]; then
+  etcpart=${part[$x]}
+ fi
+ if [ $i == bin ]; then
+  binpart=${part[$x]}
+ fi
+ let x=x+1
+done
+
+if [ -z "$etcpart" -o -z "$binpart" ]; then
+ echo "% missing etc and/or bin in \$vnddirs ($vnddirs) aborting"
+ 3; 2; 1; 0;
+fi
+
+###
+#
+# mount, copy, umount etc files
+
+c 3 mount /dev/$device$etcpart $tmpmntvnd
+
+c 4 cp etc/rc.local etc/rc.conf.local etc/rc.shutdown $tmpmntvnd/
+
+c 4 mv $tmpfstab $tmpmntvnd/fstab
+
+c 4 "echo $vers > $tmpmntvnd/.flashrd_version"
+
+umountwait 3 $tmpmntvnd
+
+###
+#
+# mount, copy, umount bin files
+
+c 3 mount /dev/$device$binpart $tmpmntvnd
+
+c 4 cp bin/ro bin/rw $tmpmntvnd/
+
+umountwait 3 $tmpmntvnd
+
+###
+#
+# done with the main disk vnd
+
+c 2 vnconfig -u $device
+
+umountwait 1 $tmpmnt
+
+###
+#
+# done with flash img vnd
+
+vnuncfgroot
+
+rmdir $tmpmntvnd $tmpmnt
+
+echo Done

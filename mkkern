@@ -1,0 +1,164 @@
+#!/bin/ksh
+#
+# flashrd mkkern
+#
+# create luscious ramdisk version of GENERIC
+#
+# Chris Cappuccio <chris@nmedia.net>
+#
+
+[ -z "$tmpmnt" ] && tmpmnt=`mktemp -d /tmp/mkkern.XXXXXXXX`
+
+###
+#
+# blocks
+
+[ -z "$blocks" ] && blocks=7480
+
+###
+#
+# rdrootfs
+
+if [ -z "$szezroot" -a -z "$1" ]; then
+ echo "% mkkern <$blocks rdrootfs>"
+ exit 1
+fi
+
+[ -z "$szezroot" ] && szezroot=$1
+
+if [ ! -f $szezroot ]; then
+ echo % $szezroot is not a file
+ exit 1
+fi
+
+###
+#
+# kernel source
+
+[ -z "$kernsrc" ] && kernsrc=/usr/src/sys/arch/`uname -m`
+
+if [ ! -d $kernsrc ]; then
+ echo % $kernsrc not found
+ exit 1
+fi
+
+###
+#
+# elfrdsetroot
+
+[ -z "$elfrdsetroot" ] && elfrdsetroot=./elfrdsetroot.c
+
+if [ ! -f $elfrdsetroot ]; then
+ echo % $elfrdsetroot not found
+ exit 1
+fi
+
+###
+#
+# GENERIC config
+
+if [ ! -f $kernsrc/conf/GENERIC ]; then
+ echo % $kernsrc/conf/GENERIC config not found
+ exit 1
+fi
+
+###
+#
+# exit 1 harness
+
+0() {
+ exit 1
+}
+
+. ./flashrd.sub
+
+###
+#
+# remove option POOL_DEBUG from /usr/src/sys/conf/GENERIC (slower allocation!)
+# modify /usr/src/sys/arch/`uname -m`/conf/GENERIC
+
+grep -v POOL_DEBUG /usr/src/sys/conf/GENERIC > /usr/src/sys/conf/FLASHRD
+# if you want POOL_DEBUG, do this instead:
+#cp /usr/src/sys/conf/GENERIC /usr/src/sys/conf/FLASHRD
+
+egrep -v ^config $kernsrc/conf/GENERIC | sed -e 's/GENERIC/FLASHRD/' > $kernsrc/conf/FLASHRD
+
+cat >> $kernsrc/conf/FLASHRD <<-EOF
+	option	RAMDISK_HOOKS
+	option	MINIROOTSIZE=$blocks
+	option	NKPTP=8
+	config	bsd	root on rd0a swap on rd0b and wd0b and sd0b
+	pseudo-device	rd 1
+	EOF
+
+sed -e 's/GENERIC/FLASHRD/' $kernsrc/conf/GENERIC.MP > $kernsrc/conf/FLASHRD.MP
+
+if [ -f config.strip ]; then
+ while read line; do
+
+  line=${line%%#*}              # strip comments
+  test -z "$line" && continue
+
+  sed -e "s/^$line//" < $kernsrc/conf/FLASHRD > $kernsrc/conf/FLASHRD.tmp
+  mv $kernsrc/conf/FLASHRD.tmp $kernsrc/conf/FLASHRD
+ done < config.strip
+else
+ echo "[no config.strip found for kernel config alterations]"
+ echo "[ramdisk kernel may be too large to boot without disabling isadma for i386/amd64]"
+fi
+
+###
+#
+# compile ELFRDSETROOT first (so we can bail out if it fails without waiting for GENERIC)
+
+c 0 cc -o ./elfrdsetroot $elfrdsetroot
+
+###
+#
+# compile our version of GENERIC
+
+T=`mktemp /tmp/mkkern.XXXXXXX`
+TMP=`mktemp /tmp/mkkern.XXXXXXX`
+
+echo -n Configuring FLASHRD, FLASHRD.MP kernels
+wd=`pwd`
+cd $kernsrc/conf
+c 0 "config FLASHRD >$T 2>&1"
+c 0 "config FLASHRD.MP >$TMP 2>&1"
+echo
+
+echo -n Compiling FLASHRD kernel
+cd $kernsrc/compile/FLASHRD
+echo -n " (make depend)"
+c 0 "make depend >/dev/null 2>&1"
+if grep "make clean" $T >/dev/null; then
+ echo -n " (make clean)"
+ c 0 "make clean >/dev/null 2>&1"
+fi
+echo -n " (make)"
+c 0 "make >/dev/null 2>&1"
+c 0 cp bsd $tmpmnt/bsd
+echo
+
+echo -n Compiling FLASHRD.MP kernel
+cd $kernsrc/compile/FLASHRD.MP
+echo -n " (make depend)"
+c 0 "make depend >/dev/null 2>&1"
+if grep "make clean" $TMP >/dev/null; then
+ echo -n " (make clean)"
+ c 0 "make clean >/dev/null 2>&1"
+fi
+echo -n " (make)"
+c 0 "make >/dev/null 2>&1"
+c 0 cp bsd $tmpmnt/bsd.mp
+echo
+
+rm $T
+
+###
+#
+# run elfrdsetroot
+
+cd $wd
+c 0 ./elfrdsetroot $tmpmnt/bsd $szezroot
+c 0 ./elfrdsetroot $tmpmnt/bsd.mp $szezroot
